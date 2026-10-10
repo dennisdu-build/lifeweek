@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>人生周历 - 自动标记前置周数</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4f46e5',
+                        secondary: '#3730a3',
+                        neutral: '#1f2937',
+                        light: '#f9fafb',
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .dot-hover {
+                @apply transition-all duration-150 hover:scale-150 hover:border-gray-500;
+            }
+            .btn-effect {
+                @apply transition-all duration-200 transform hover:scale-105 active:scale-95;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-inter text-gray-800 min-h-screen">
+    <div class="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        <!-- 标题区域 -->
+        <div class="text-center mb-8">
+            <h1 class="text-[clamp(1.8rem,5vw,2.8rem)] font-bold text-neutral mb-2">人生周历</h1>
+            <p class="text-gray-600 mb-6">从0岁到79岁，共4160周的生命旅程</p>
+            
+            <!-- 输入区域 -->
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
+                <label for="birthdate" class="text-gray-700 font-medium whitespace-nowrap">出生年月:</label>
+                <input 
+                    type="month" 
+                    id="birthdate" 
+                    class="border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary w-full sm:w-auto"
+                    max="{{ new Date().toISOString().slice(0, 7) }}"
+                >
+                <button 
+                    id="calculateBtn" 
+                    class="bg-primary hover:bg-secondary text-white px-6 py-2.5 rounded-lg btn-effect flex items-center gap-2"
+                >
+                    <i class="fa fa-calculator"></i> 计算并标记
+                </button>
+                <button 
+                    id="clearAllBtn" 
+                    class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-2.5 rounded-lg btn-effect flex items-center gap-2"
+                >
+                    <i class="fa fa-eraser"></i> 清除所有
+                </button>
+            </div>
+            
+            <!-- 信息和提示 -->
+            <div id="infoPanel" class="hidden bg-blue-50 border border-blue-100 text-blue-800 px-4 py-2 rounded-lg mb-4 inline-block">
+                <p id="resultInfo" class="text-sm"></p>
+            </div>
+            <div class="text-gray-500 text-sm space-y-1">
+                <p>• 点击任意圆点，自动涂黑该圆点及其前面所有圆点</p>
+                <p>• 输入出生年月，点击"计算并标记"自动生成已度过的周数</p>
+                <p>• 按住鼠标拖动可连续标记多个圆点</p>
+            </div>
+        </div>
+        
+        <!-- 日历容器 -->
+        <div class="bg-white rounded-xl shadow-md p-4 sm:p-6 overflow-x-auto">
+            <div id="calendarContainer" class="min-w-[900px]"></div>
+        </div>
+        
+        <!-- 统计信息 -->
+        <div class="mt-6 text-center text-gray-600">
+            <p>已标记: <span id="markedCount" class="font-semibold">0</span> 周 | 占比: <span id="markedPercentage" class="font-semibold">0%</span></p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 常量定义
+            const totalYears = 80;       // 总年数（0-79岁）
+            const weeksPerYear = 52;     // 每年周数
+            const totalWeeks = totalYears * weeksPerYear; // 总周数
+            const defaultMarkedYears = 25; // 默认标记到25岁
+            
+            // DOM元素
+            const calendarContainer = document.getElementById('calendarContainer');
+            const birthdateInput = document.getElementById('birthdate');
+            const calculateBtn = document.getElementById('calculateBtn');
+            const clearAllBtn = document.getElementById('clearAllBtn');
+            const resultInfo = document.getElementById('resultInfo');
+            const infoPanel = document.getElementById('infoPanel');
+            const markedCountEl = document.getElementById('markedCount');
+            const markedPercentageEl = document.getElementById('markedPercentage');
+            
+            // 状态变量
+            let isDragging = false;
+            let lastMarkedState = null;
+            
+            // 初始化日历
+            generateCalendar();
+            // 默认标记到25岁
+            markDefaultYears();
+            updateStatistics();
+            
+            // 设置默认出生日期（25年前）
+            const defaultBirthdate = new Date();
+            defaultBirthdate.setFullYear(defaultBirthdate.getFullYear() - defaultMarkedYears);
+            birthdateInput.value = defaultBirthdate.toISOString().slice(0, 7);
+            
+            // 生成日历函数 - 从0岁开始
+            function generateCalendar() {
+                calendarContainer.innerHTML = '';
+                
+                // 从0岁开始生成到79岁（共80年）
+                for (let year = 0; year < totalYears; year++) {
+                    // 创建年份行
+                    const yearRow = document.createElement('div');
+                    yearRow.className = 'flex items-center mb-3 last:mb-0';
+                    
+                    // 年龄标签
+                    const ageLabel = document.createElement('div');
+                    ageLabel.className = 'w-16 text-right pr-4 font-medium text-gray-700 min-w-[4rem]';
+                    ageLabel.textContent = `${year}岁`;
+                    yearRow.appendChild(ageLabel);
+                    
+                    // 周点容器
+                    const weekDots = document.createElement('div');
+                    weekDots.className = 'flex gap-[2px] flex-wrap';
+                    
+                    // 生成每周的点
+                    for (let week = 0; week < weeksPerYear; week++) {
+                        const dot = document.createElement('div');
+                        dot.className = 'w-2.5 h-2.5 rounded-full border border-gray-200 cursor-pointer dot-hover';
+                        dot.dataset.age = year;
+                        dot.dataset.week = week;
+                        dot.dataset.index = year * weeksPerYear + week;
+                        
+                        // 鼠标点击事件 - 点击时标记当前及之前所有圆点
+                        dot.addEventListener('click', function(e) {
+                            // 如果不是拖拽状态才执行此逻辑
+                            if (!isDragging) {
+                                e.preventDefault();
+                                const currentIndex = parseInt(this.dataset.index);
+                                markUpToIndex(currentIndex);
+                            }
+                        });
+                        
+                        // 鼠标按下事件（用于拖拽）
+                        dot.addEventListener('mousedown', function(e) {
+                            e.preventDefault();
+                            isDragging = true;
+                            // 记录当前标记状态，用于拖拽时保持一致的操作
+                            lastMarkedState = this.classList.contains('bg-neutral');
+                            
+                            // 拖拽开始时也执行标记到当前位置的操作
+                            const currentIndex = parseInt(this.dataset.index);
+                            if (!lastMarkedState) {
+                                markUpToIndex(currentIndex);
+                            } else {
+                                clearFromIndex(currentIndex);
+                            }
+                        });
+                        
+                        // 鼠标进入事件（用于拖拽标记）
+                        dot.addEventListener('mouseenter', function() {
+                            if (isDragging) {
+                                const currentIndex = parseInt(this.dataset.index);
+                                if (!lastMarkedState) {
+                                    markUpToIndex(currentIndex);
+                                } else {
+                                    clearFromIndex(currentIndex);
+                                }
+                            }
+                        });
+                        
+                        weekDots.appendChild(dot);
+                    }
+                    
+                    yearRow.appendChild(weekDots);
+                    calendarContainer.appendChild(yearRow);
+                }
+                
+                // 鼠标释放事件（全局）
+                document.addEventListener('mouseup', function() {
+                    isDragging = false;
+                    lastMarkedState = null;
+                });
+                
+                // 鼠标离开窗口事件
+                document.addEventListener('mouseleave', function() {
+                    isDragging = false;
+                    lastMarkedState = null;
+                });
+            }
+            
+            // 标记指定索引及之前的所有圆点
+            function markUpToIndex(index) {
+                const allDots = document.querySelectorAll('#calendarContainer .dot-hover');
+                
+                allDots.forEach((dot, dotIndex) => {
+                    if (dotIndex <= index) {
+                        if (!dot.classList.contains('bg-neutral')) {
+                            dot.classList.add('bg-neutral', 'border-neutral');
+                        }
+                    }
+                });
+                
+                updateStatistics();
+            }
+            
+            // 清除指定索引及之后的所有圆点
+            function clearFromIndex(index) {
+                const allDots = document.querySelectorAll('#calendarContainer .dot-hover');
+                
+                allDots.forEach((dot, dotIndex) => {
+                    if (dotIndex >= index) {
+                        if (dot.classList.contains('bg-neutral')) {
+                            dot.classList.remove('bg-neutral', 'border-neutral');
+                        }
+                    }
+                });
+                
+                updateStatistics();
+            }
+            
+            // 默认标记到指定年龄
+            function markDefaultYears() {
+                const weeksToMark = defaultMarkedYears * weeksPerYear;
+                markUpToIndex(weeksToMark - 1); // 减1是因为索引从0开始
+                
+                // 显示默认信息
+                resultInfo.textContent = `默认标记到 ${defaultMarkedYears} 岁，共 ${weeksToMark} 周`;
+                infoPanel.classList.remove('hidden');
+            }
+            
+            // 更新统计信息
+            function updateStatistics() {
+                const markedDots = document.querySelectorAll('.bg-neutral');
+                const count = markedDots.length;
+                const percentage = Math.round((count / totalWeeks) * 100);
+                
+                markedCountEl.textContent = count;
+                markedPercentageEl.textContent = percentage;
+            }
+            
+            // 计算并标记到当前周
+            calculateBtn.addEventListener('click', function() {
+                const birthdate = new Date(birthdateInput.value);
+                
+                // 验证输入
+                if (!birthdateInput.value || isNaN(birthdate.getTime())) {
+                    alert('请选择有效的出生年月');
+                    return;
+                }
+                
+                // 获取当前日期
+                const today = new Date();
+                
+                // 计算从出生到现在的总天数
+                const timeDiff = today - birthdate;
+                const dayDiff = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+                
+                // 计算总周数（向下取整）
+                const weeksLived = Math.floor(dayDiff / 7);
+                
+                // 计算当前年龄和周数
+                const currentAge = Math.min(Math.floor(weeksLived / weeksPerYear), totalYears - 1);
+                const weeksIntoAge = weeksLived % weeksPerYear;
+                
+                // 标记到计算出的周数
+                markUpToIndex(weeksLived - 1); // 减1是因为索引从0开始
+                
+                // 显示信息
+                resultInfo.textContent = `您已度过 ${currentAge} 岁零 ${weeksIntoAge} 周，共 ${weeksLived} 周`;
+                infoPanel.classList.remove('hidden');
+                
+                updateStatistics();
+            });
+            
+            // 清除所有标记
+            clearAllBtn.addEventListener('click', function() {
+                const markedDots = document.querySelectorAll('.bg-neutral');
+                markedDots.forEach(dot => {
+                    dot.classList.remove('bg-neutral', 'border-neutral');
+                });
+                infoPanel.classList.add('hidden');
+                updateStatistics();
+            });
+        });
+    </script>
+</body>
+</html>

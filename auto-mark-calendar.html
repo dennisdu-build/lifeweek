@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>人生周历 - 自动标记前置周数</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        apple: {
+                            blue: '#0071e3',
+                            blueDark: '#0077ed',
+                            bg: '#f5f5f7',
+                            card: '#ffffff',
+                            text: '#1d1d1f',
+                            textSecondary: '#6e6e73',
+                            textTertiary: '#86868b',
+                            divider: '#d2d2d7',
+                            border: '#e5e5ea',
+                            accent: '#1d1d1f',
+                        }
+                    },
+                    fontFamily: {
+                        sf: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Display"', '"SF Pro Text"', '"Helvetica Neue"', 'Helvetica', 'Arial', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .dot-hover {
+                @apply transition-all duration-300 ease-out cursor-pointer;
+            }
+            .dot-hover:hover {
+                @apply scale-125;
+            }
+            .btn-effect {
+                @apply transition-all duration-200 ease-out active:scale-[0.97];
+            }
+        }
+    </style>
+    <style>
+        /* Apple-style global refinements */
+        html {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        body {
+            background: #f5f5f7;
+        }
+        /* Subtle gradient background */
+        .hero-bg {
+            background: radial-gradient(ellipse at top, #ffffff 0%, #f5f5f7 100%);
+        }
+        /* Apple-style button */
+        .btn-primary {
+            background: linear-gradient(180deg, #0077ed 0%, #0071e3 100%);
+            box-shadow: 0 1px 2px rgba(0, 113, 227, 0.3), inset 0 1px 0 rgba(255,255,255,0.15);
+        }
+        .btn-primary:hover {
+            background: linear-gradient(180deg, #0088ff 0%, #0077ed 100%);
+            box-shadow: 0 2px 8px rgba(0, 113, 227, 0.35), inset 0 1px 0 rgba(255,255,255,0.15);
+        }
+        .btn-secondary {
+            background: rgba(0,0,0,0.04);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        .btn-secondary:hover {
+            background: rgba(0,0,0,0.08);
+        }
+        /* Glassmorphism for input card */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.72);
+            backdrop-filter: saturate(180%) blur(20px);
+            -webkit-backdrop-filter: saturate(180%) blur(20px);
+            border: 1px solid rgba(0, 0, 0, 0.06);
+        }
+        /* Apple-style card shadow */
+        .apple-shadow {
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04), 0 24px 48px -12px rgba(0,0,0,0.06);
+        }
+        /* Info pill */
+        .info-pill {
+            background: rgba(0, 113, 227, 0.08);
+            border: 1px solid rgba(0, 113, 227, 0.15);
+            color: #0071e3;
+        }
+        /* Dot base styles — future (green) */
+        .cal-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            border: 1px solid rgba(52, 199, 89, 0.6);
+            background: rgba(52, 199, 89, 0.55);
+            transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            cursor: pointer;
+        }
+        /* Dot marked — past (gray, unavailable visually) */
+        .cal-dot.marked {
+            background: #d2d2d7;
+            border-color: #c7c7cc;
+        }
+        .cal-dot:hover {
+            transform: scale(1.3);
+        }
+        /* Hover on green (future): brighten + glow */
+        .cal-dot:not(.marked):hover {
+            background: rgba(52, 199, 89, 0.9);
+            border-color: rgba(52, 199, 89, 1);
+            box-shadow: 0 0 0 3px rgba(52, 199, 89, 0.25);
+        }
+        /* Hover on gray (past): subtle dimmed ring */
+        .cal-dot.marked:hover {
+            background: #c7c7cc;
+            border-color: #b0b0b5;
+            box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
+        }
+        /* Age label */
+        .age-label {
+            font-variant-numeric: tabular-nums;
+            font-feature-settings: "tnum";
+        }
+        /* Help tooltip */
+        .help-trigger {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.06);
+            color: #6e6e73;
+            font-size: 12px;
+            cursor: help;
+            transition: all 0.2s ease;
+        }
+        .help-trigger:hover {
+            background: rgba(0, 113, 227, 0.12);
+            color: #0071e3;
+        }
+        .help-tooltip {
+            position: absolute;
+            bottom: calc(100% + 10px);
+            left: 50%;
+            transform: translateX(-50%) translateY(4px);
+            background: rgba(29, 29, 31, 0.96);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            color: #f5f5f7;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 12px;
+            line-height: 1.6;
+            font-weight: 400;
+            white-space: nowrap;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            z-index: 50;
+        }
+        .help-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: rgba(29, 29, 31, 0.96);
+        }
+        .help-wrapper:hover .help-tooltip,
+        .help-wrapper:focus-within .help-tooltip {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        .help-tooltip p {
+            margin: 0;
+        }
+        .help-tooltip p + p {
+            margin-top: 2px;
+        }
+        /* Input field */
+        input[type="month"].apple-input {
+            border: 1px solid #d2d2d7;
+            background: #ffffff;
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 15px;
+            color: #1d1d1f;
+            transition: all 0.2s ease;
+            outline: none;
+        }
+        input[type="month"].apple-input:focus {
+            border-color: #0071e3;
+            box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.15);
+        }
+        /* Statistics bar */
+        .stat-num {
+            font-variant-numeric: tabular-nums;
+            font-feature-settings: "tnum";
+        }
+        /* Custom scrollbar */
+        #calendarContainer::-webkit-scrollbar {
+            height: 8px;
+        }
+        #calendarContainer::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        #calendarContainer::-webkit-scrollbar-thumb {
+            background: #d2d2d7;
+            border-radius: 4px;
+        }
+        #calendarContainer::-webkit-scrollbar-thumb:hover {
+            background: #86868b;
+        }
+    </style>
+</head>
+<body class="bg-apple-bg font-sf text-apple-text min-h-screen flex flex-col">
+    <div class="flex-1 flex flex-col max-w-7xl w-full mx-auto px-5 py-12 sm:px-8 sm:py-16 lg:px-10 lg:py-20 gap-10 sm:gap-12 lg:gap-14">
+        <!-- 标题区域 -->
+        <div class="flex flex-col items-center text-center gap-3 sm:gap-4">
+            <h1 class="text-[clamp(2.2rem,6vw,3.5rem)] font-semibold tracking-tight text-apple-text">人生周历</h1>
+            <p class="text-apple-textSecondary text-base sm:text-lg font-light tracking-wide mb-6">从 1 岁到 100 岁，共 5200 周的生命旅程</p>
+            
+            <!-- 输入区域 -->
+            <div class="glass-card rounded-2xl p-6 sm:p-8 w-full shadow-xl flex flex-col items-center">
+                <div class="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 mb-5">
+                    <label for="birthdate" class="text-apple-text font-medium text-sm whitespace-nowrap tracking-wide">出生年月</label>
+                    <input 
+                        type="month" 
+                        id="birthdate" 
+                        class="apple-input w-full sm:w-auto"
+                        max="{{ new Date().toISOString().slice(0, 7) }}"
+                    >
+                    <button 
+                        id="calculateBtn" 
+                        class="btn-primary btn-effect text-white px-6 py-2.5 rounded-full text-sm font-medium flex items-center gap-2 min-w-[140px] justify-center"
+                    >
+                        <i class="fa fa-calculator text-xs"></i> 计算并标记
+                    </button>
+                    <button 
+                        id="clearAllBtn" 
+                        class="btn-secondary btn-effect text-apple-text px-6 py-2.5 rounded-full text-sm font-medium flex items-center gap-2 min-w-[110px] justify-center"
+                    >
+                        <i class="fa fa-eraser text-xs"></i> 清除
+                    </button>
+                </div>
+                
+                <!-- 信息和提示 -->
+                <div id="infoPanel" class="hidden info-pill px-4 py-2 rounded-full text-xs sm:text-sm font-medium mb-4 flex items-center gap-2">
+                    <i class="fa fa-info-circle text-xs"></i>
+                    <span id="resultInfo"></span>
+                </div>
+                
+                <!-- Help tooltip -->
+                <div class="help-wrapper relative inline-block mb-1">
+                    <span class="help-trigger" title="">
+                        <i class="fa fa-question"></i>
+                    </span>
+                    <div class="help-tooltip" role="tooltip">
+                        <p>· 点击任意圆点，自动标记该圆点及其前面所有圆点</p>
+                        <p>· 输入出生年月，自动生成已度过的周数</p>
+                        <p>· 按住鼠标拖动可连续标记多个圆点</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 日历容器 -->
+        <div class="bg-white rounded-3xl apple-shadow p-5 sm:p-8 overflow-x-auto flex justify-center">
+            <div id="calendarContainer" class="min-w-[900px] inline-flex flex-col gap-[6px]"></div>
+        </div>
+        
+        <!-- 统计信息 -->
+        <div class="flex justify-center">
+            <div class="inline-flex items-center gap-6 sm:gap-10 text-apple-textSecondary text-sm sm:text-base font-light">
+                <div>
+                    已标记 <span id="markedCount" class="stat-num text-apple-text font-semibold text-lg sm:text-xl">0</span> 周
+                </div>
+                <div class="w-px h-5 bg-apple-divider/50"></div>
+                <div>
+                    占比 <span id="markedPercentage" class="stat-num text-apple-text font-semibold text-lg sm:text-xl">0%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 常量定义
+            const totalYears = 100;      // 总年数（1-100岁）
+            const weeksPerYear = 52;     // 每年周数
+            const totalWeeks = totalYears * weeksPerYear; // 总周数
+            const defaultMarkedYears = 25; // 默认标记到25岁
+            
+            // DOM元素
+            const calendarContainer = document.getElementById('calendarContainer');
+            const birthdateInput = document.getElementById('birthdate');
+            const calculateBtn = document.getElementById('calculateBtn');
+            const clearAllBtn = document.getElementById('clearAllBtn');
+            const resultInfo = document.getElementById('resultInfo');
+            const infoPanel = document.getElementById('infoPanel');
+            const markedCountEl = document.getElementById('markedCount');
+            const markedPercentageEl = document.getElementById('markedPercentage');
+            
+            // 状态变量
+            let isDragging = false;
+            let lastMarkedState = null;
+            
+            // 初始化日历
+            generateCalendar();
+            updateStatistics();
+            
+            // 生成日历函数 - 从0岁开始
+            function generateCalendar() {
+                calendarContainer.innerHTML = '';
+                
+                // 从0岁开始生成到79岁（共80年）
+                for (let year = 0; year < totalYears; year++) {
+                    // 创建年份行
+                    const yearRow = document.createElement('div');
+                    yearRow.className = 'flex items-center';
+                    
+                    // 年龄标签
+                    const ageLabel = document.createElement('div');
+                    ageLabel.className = 'w-16 text-center font-medium text-apple-textTertiary text-xs age-label min-w-[4rem] tracking-wide';
+                    ageLabel.textContent = `${year + 1}岁`;
+                    yearRow.appendChild(ageLabel);
+                    
+                    // 周点容器
+                    const weekDots = document.createElement('div');
+                    weekDots.className = 'flex gap-[3px] flex-wrap';
+                    
+                    // 生成每周的点
+                    for (let week = 0; week < weeksPerYear; week++) {
+                        const dot = document.createElement('div');
+                        dot.className = 'cal-dot';
+                        dot.dataset.age = year;
+                        dot.dataset.week = week;
+                        dot.dataset.index = year * weeksPerYear + week;
+                        
+                        // 鼠标点击事件 - 点击时标记当前及之前所有圆点
+                        dot.addEventListener('click', function(e) {
+                            // 如果不是拖拽状态才执行此逻辑
+                            if (!isDragging) {
+                                e.preventDefault();
+                                const currentIndex = parseInt(this.dataset.index);
+                                markUpToIndex(currentIndex);
+                            }
+                        });
+                        
+                        // 鼠标按下事件（用于拖拽）
+                        dot.addEventListener('mousedown', function(e) {
+                            e.preventDefault();
+                            isDragging = true;
+                            // 记录当前标记状态，用于拖拽时保持一致的操作
+                            lastMarkedState = this.classList.contains('marked');
+                            
+                            // 拖拽开始时也执行标记到当前位置的操作
+                            const currentIndex = parseInt(this.dataset.index);
+                            if (!lastMarkedState) {
+                                markUpToIndex(currentIndex);
+                            } else {
+                                clearFromIndex(currentIndex);
+                            }
+                        });
+                        
+                        // 鼠标进入事件（用于拖拽标记）
+                        dot.addEventListener('mouseenter', function() {
+                            if (isDragging) {
+                                const currentIndex = parseInt(this.dataset.index);
+                                if (!lastMarkedState) {
+                                    markUpToIndex(currentIndex);
+                                } else {
+                                    clearFromIndex(currentIndex);
+                                }
+                            }
+                        });
+                        
+                        weekDots.appendChild(dot);
+                    }
+                    
+                    yearRow.appendChild(weekDots);
+                    calendarContainer.appendChild(yearRow);
+                }
+                
+                // 鼠标释放事件（全局）
+                document.addEventListener('mouseup', function() {
+                    isDragging = false;
+                    lastMarkedState = null;
+                });
+                
+                // 鼠标离开窗口事件
+                document.addEventListener('mouseleave', function() {
+                    isDragging = false;
+                    lastMarkedState = null;
+                });
+            }
+            
+            // 标记指定索引及之前的所有圆点
+            function markUpToIndex(index) {
+                const allDots = document.querySelectorAll('#calendarContainer .cal-dot');
+                
+                allDots.forEach((dot, dotIndex) => {
+                    if (dotIndex <= index) {
+                        if (!dot.classList.contains('marked')) {
+                            dot.classList.add('marked');
+                        }
+                    }
+                });
+                
+                updateStatistics();
+            }
+            
+            // 清除指定索引及之后的所有圆点
+            function clearFromIndex(index) {
+                const allDots = document.querySelectorAll('#calendarContainer .cal-dot');
+                
+                allDots.forEach((dot, dotIndex) => {
+                    if (dotIndex >= index) {
+                        if (dot.classList.contains('marked')) {
+                            dot.classList.remove('marked');
+                        }
+                    }
+                });
+                
+                updateStatistics();
+            }
+            
+            // 默认标记到指定年龄
+            function markDefaultYears() {
+                const weeksToMark = defaultMarkedYears * weeksPerYear;
+                markUpToIndex(weeksToMark - 1); // 减1是因为索引从0开始
+                
+                // 显示默认信息
+                resultInfo.textContent = `默认标记到 ${defaultMarkedYears} 岁，共 ${weeksToMark} 周`;
+                infoPanel.classList.remove('hidden');
+            }
+            
+            // 更新统计信息
+            function updateStatistics() {
+                const markedDots = document.querySelectorAll('.marked');
+                const count = markedDots.length;
+                const percentage = Math.round((count / totalWeeks) * 100);
+                
+                markedCountEl.textContent = count;
+                markedPercentageEl.textContent = percentage + '%';
+            }
+            
+            // 计算并标记到当前周
+            calculateBtn.addEventListener('click', function() {
+                const birthdate = new Date(birthdateInput.value);
+                
+                // 验证输入
+                if (!birthdateInput.value || isNaN(birthdate.getTime())) {
+                    alert('请选择有效的出生年月');
+                    return;
+                }
+                
+                // 获取当前日期
+                const today = new Date();
+                
+                // 计算从出生到现在的总天数
+                const timeDiff = today - birthdate;
+                const dayDiff = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+                
+                // 计算总周数（向下取整）
+                const weeksLived = Math.floor(dayDiff / 7);
+                
+                // 计算当前年龄和周数
+                const currentAge = Math.min(Math.floor(weeksLived / weeksPerYear), totalYears - 1);
+                const weeksIntoAge = weeksLived % weeksPerYear;
+                
+                // 标记到计算出的周数
+                markUpToIndex(weeksLived - 1); // 减1是因为索引从0开始
+                
+                // 显示信息
+                resultInfo.textContent = `您已度过 ${currentAge} 岁零 ${weeksIntoAge} 周，共 ${weeksLived} 周`;
+                infoPanel.classList.remove('hidden');
+                
+                updateStatistics();
+            });
+            
+            // 清除所有标记
+            clearAllBtn.addEventListener('click', function() {
+                const markedDots = document.querySelectorAll('.marked');
+                markedDots.forEach(dot => {
+                    dot.classList.remove('marked');
+                });
+                infoPanel.classList.add('hidden');
+                updateStatistics();
+            });
+        });
+    </script>
+</body>
+</html>
